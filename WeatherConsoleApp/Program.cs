@@ -11,6 +11,7 @@ namespace WeatherConsoleApp
 {
     internal class Program
     {
+        private static readonly CancellationTokenSource _cts = new();
         static void Main(string[] args)
         {
             var parser = new Parser(x =>
@@ -38,7 +39,7 @@ namespace WeatherConsoleApp
             var options = parser.ParseArguments<Options>(args)
                                 .WithParsedAsync(async (op) =>
                                 {
-                                    var result = new WeatherService(progress, op).RunAsync();
+                                    var result = new WeatherService(progress, op).RunAsync(_cts.Token);
                                     Console.WriteLine(await result);
                                 }).ContinueWith(x => Console.Write("Press any to exit"));
             Console.ReadLine();

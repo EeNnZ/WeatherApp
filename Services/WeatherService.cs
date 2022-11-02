@@ -18,26 +18,26 @@ namespace WeatherCore.Services
             _options = options;
         }
 
-        public async Task<IModel> RunAsync()
+        public async Task<IModel> RunAsync(CancellationToken token)
         {
             string? requiredLocation = _options.RequiredLocation;
-            if (requiredLocation != null) { Location = await Locator.TryGetLocationByCityNameAsync(requiredLocation); }
-            else { Location = await Locator.GetLocationByIpAsync(); }
+            if (requiredLocation != null) { Location = await Locator.TryGetLocationByCityNameAsync(requiredLocation, token); }
+            else { Location = await Locator.GetLocationByIpAsync(token); }
 
-            if (_options.RequiredMode == IOptions.Mode.Now) { return await GetWeatherModelAsync(); }
-            else { return await GetForecastModelAsync(); }
+            if (_options.RequiredMode == IOptions.Mode.Now) { return await GetWeatherModelAsync(token); }
+            else { return await GetForecastModelAsync(token); }
         }
-        private async Task<WeatherModel> GetWeatherModelAsync()
+        private async Task<WeatherModel> GetWeatherModelAsync(CancellationToken token)
         {
-            var sunModelTask = GetSunModelAsync();
+            var sunModelTask = GetSunModelAsync(token);
 
             string url = UrlProvider.GetWeatherUrl(Location.latitude, Location.longitude);
             var filename = ConfigHelper.TempFilename + "w";
             using (var input = new FileStream(filename, FileMode.Create))
-                await HttpHelper.GetFileAsync(url, input, Progress);
+                await HttpHelper.GetFileAsync(url, input, token, Progress);
 
             using var output = File.OpenRead(filename);
-            var model = await JsonSerializer.DeserializeAsync<WeatherModel>(output);
+            var model = await JsonSerializer.DeserializeAsync<WeatherModel>(output, cancellationToken: token);
 
             if (model == null) { throw new NullReferenceException($"Model is null: {nameof(model)}"); }
 
@@ -45,17 +45,17 @@ namespace WeatherCore.Services
             //File.Delete(FILE_NAME);
             return model;
         }
-        private async Task<ForecastModel> GetForecastModelAsync()
+        private async Task<ForecastModel> GetForecastModelAsync(CancellationToken token)
         {
-            var sunModelsTask = Task.Run(() => GetSunModelsAsync());
+            var sunModelsTask = Task.Run(() => GetSunModelsAsync(token), token);
 
             string url = UrlProvider.GetForecastUrl(Location.latitude, Location.longitude);
             var filename = ConfigHelper.TempFilename + "f";
             using (var input = new FileStream(filename, FileMode.Create))
-                await HttpHelper.GetFileAsync(url, input, Progress);
+                await HttpHelper.GetFileAsync(url, input, token, Progress);
 
             using var output = File.OpenRead(filename);
-            var model = await JsonSerializer.DeserializeAsync<ForecastModel>(output);
+            var model = await JsonSerializer.DeserializeAsync<ForecastModel>(output, cancellationToken: token);
 
             if (model == null) { throw new NullReferenceException($"Model is null: {nameof(model)}"); }
 
@@ -67,27 +67,28 @@ namespace WeatherCore.Services
 
             return model;
         }
-        private async Task<SunModel[]> GetSunModelsAsync()
+        private async Task<SunModel[]> GetSunModelsAsync(CancellationToken token)
         {
             var models = new SunModel[5];
             var date = DateTime.Today;
             for (int i = 0; i < models.Length; i++)
             {
-                models[i] = await GetSunModelAsync(date.ToString());
+                token.ThrowIfCancellationRequested();
+                models[i] = await GetSunModelAsync(token, date.ToString());
                 date = date.AddDays(1);
             }
             return models;
         }
-        private async Task<SunModel> GetSunModelAsync(string? date = null)
+        private async Task<SunModel> GetSunModelAsync(CancellationToken token, string? date = null)
         {
             string url;
             if (date != null) { url = UrlProvider.GetSunUrl(Location.latitude, Location.longitude, date); }
             else { url = UrlProvider.GetSunUrl(Location.latitude, Location.longitude); }
             var filename = ConfigHelper.TempFilename + "s";
             using (var input = new FileStream(filename, FileMode.Create))
-                await HttpHelper.GetFileAsync(url, input, Progress);
+                await HttpHelper.GetFileAsync(url, input, token, Progress);
             using var output = File.OpenRead(filename);
-            var model = await JsonSerializer.DeserializeAsync<SunModel>(output);
+            var model = await JsonSerializer.DeserializeAsync<SunModel>(output, cancellationToken: token);
             if (model == null) { throw new NullReferenceException($"Model is null: {nameof(model)}"); }
             return model;
         }

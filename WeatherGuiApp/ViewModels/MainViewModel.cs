@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using WeatherCore;
@@ -20,7 +21,8 @@ using WeatherGuiApp;
 namespace WeatherGuiApp.ViewModels
 {
     public class MainViewModel : AbstractBindable
-    { 
+    {
+        private CancellationTokenSource _cts = new();
         private WeatherService _service = null!;
         private readonly IProgress<double> _progress;
         //Need dispatcher?
@@ -75,6 +77,7 @@ namespace WeatherGuiApp.ViewModels
         }
         public bool ForecastVisible => !CurrentWeatherVisible;
         public DelegateCommand GoButtonCommand => new(async () => await DoWork());
+        public DelegateCommand CancelCommand => new(() => Cancel());
 
         public ObservableCollection<KeyValuePair<string, object>> Results { get; private set; }
         //TODO: Implement forecast representation in XAML
@@ -98,16 +101,47 @@ namespace WeatherGuiApp.ViewModels
             _stopwatch.Start();
             SetBusy();
 
-            var model = await GetResultASync();
+            IModel model;
+            try
+            {
+                model = await GetResultASync(_cts.Token);
+            }
+            catch (OperationCanceledException e)
+            {
+                SetCanceled(e.Message);
+                RestoreToken();
+                return;
+            }
             var res = ModelAsDictionary(model);
             UpdateResults(res);
 
             _stopwatch.Stop();
             Restore();
         }
-        private async Task<IModel> GetResultASync()
+        private void Cancel()
         {
-            var model = await _service.RunAsync();
+            if (GoButtonEnabled) return;
+            if (_cts.Token.CanBeCanceled)
+            {
+                _cts.Cancel();
+            }
+            else MessageBox.Show("Operation cannot be canceled right now", "Cancellation error", MessageBoxButton.OK);
+        }
+
+        private void RestoreToken()
+        {
+            _cts = new();
+        }
+
+        private void SetCanceled(string message)
+        {
+            Restore();
+            Results.Add(new KeyValuePair<string, object>("Status", "Canceled"));
+        }
+
+        private async Task<IModel> GetResultASync(CancellationToken token)
+        {
+            var model = await _service.RunAsync(token);
             return model;
         }
         private IEnumerable<KeyValuePair<string, object>> ModelAsDictionary(IModel model)

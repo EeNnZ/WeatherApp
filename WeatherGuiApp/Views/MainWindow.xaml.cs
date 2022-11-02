@@ -17,18 +17,17 @@ namespace WeatherGuiApp
     /// </summary>
     public partial class MainWindow : Window
     {
-        MainViewModel viewModel;
-        IOptions options;
-        IProgress<double> progress;
+        readonly MainViewModel _viewModel;
+        readonly IProgress<double> _progress;
         public MainWindow()
         {
             InitializeComponent();
             HttpHelper.InitializeClient();
             ConfigHelper.BuildConfig();
-            progress = new Progress<double>(value => progressBar.Value = value);
-            viewModel = new MainViewModel(progress, Dispatcher);
-            DataContext = viewModel;
-            weatherControl.DataContext = viewModel;
+            _progress = new Progress<double>(value => progressBar.Value = value);
+            _viewModel = new MainViewModel(_progress, Dispatcher);
+            DataContext = _viewModel;
+            weatherControl.DataContext = _viewModel;
         }
     }
 }

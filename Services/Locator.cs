@@ -7,9 +7,9 @@ namespace WeatherCore.Services
 {
     public static class Locator
     {
-        public static async Task<LocationStruct> TryGetLocationByCityNameAsync(string requestedCity)
+        public static async Task<LocationStruct> TryGetLocationByCityNameAsync(string requestedCity, CancellationToken token)
         {
-            var geocodes = await GetGeocodeModelsAsync(requestedCity);
+            var geocodes = await GetGeocodeModelsAsync(requestedCity, token);
 #if !DEBUG
             var target = geocodes.First(x => x.country.Equals("ru", StringComparison.InvariantCultureIgnoreCase));
 #else
@@ -18,31 +18,31 @@ namespace WeatherCore.Services
             if (target != null) { return new LocationStruct(target.lat, target.lon, target.name); }
             else throw new Exception("Cannot find this place, try again");
         }
-        public static async Task<LocationStruct> GetLocationByIpAsync()
+        public static async Task<LocationStruct> GetLocationByIpAsync(CancellationToken token)
         {
-            var model = await GetIpLocationModelAsync();
+            var model = await GetIpLocationModelAsync(token);
             return new LocationStruct(model.lat, model.lon, model.city);
         }
-        private static async Task<IpLocationModel> GetIpLocationModelAsync()
+        private static async Task<IpLocationModel> GetIpLocationModelAsync(CancellationToken token)
         {
-            string ipString = await GetIp();
+            string ipString = await GetIp(token);
             string url = UrlProvider.GetIpLocationUrl(ipString);
-            var content = await HttpHelper.GetContentAsync(url);
+            var content = await HttpHelper.GetContentAsync(url, token);
             var model = await content.ReadAsAsync<IpLocationModel>();
             return model;
         }
-        private static async Task<List<GeocodeModel>> GetGeocodeModelsAsync(string requestedCity)
+        private static async Task<List<GeocodeModel>> GetGeocodeModelsAsync(string requestedCity, CancellationToken token)
         {
             string url = UrlProvider.GetGeocodeUrl(requestedCity);
-            var content = await HttpHelper.GetContentAsync(url);
-            var geocodes = await content.ReadAsAsync<List<GeocodeModel>>();
+            var content = await HttpHelper.GetContentAsync(url, token);
+            var geocodes = await content.ReadAsAsync<List<GeocodeModel>>(token);
             return geocodes;
         }
-        private static async Task<string> GetIp()
+        private static async Task<string> GetIp(CancellationToken token)
         {
-            var response = await HttpHelper.Client.GetAsync("http://icanhazip.com/");
+            var response = await HttpHelper.Client.GetAsync("http://icanhazip.com/", token);
             response.EnsureSuccessStatusCode();
-            string ip = await response.Content.ReadAsStringAsync();
+            string ip = await response.Content.ReadAsStringAsync(token);
             return ip;
         }
     }
